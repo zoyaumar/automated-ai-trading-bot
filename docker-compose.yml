@@ -1,0 +1,12 @@
+services:
+  bot:
+    build: .
+    restart: always
+    env_file: .env
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - bot_data:/app/data
+    tz: America/New_York
+
+volumes:
+  bot_data:

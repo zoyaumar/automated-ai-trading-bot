@@ -1,0 +1,3 @@
+## Completion Log
+
+10/25: Scaffolded the repo (`bot/`, `scripts/`, `tests/`, Docker, config) and built the core bot: config validation, risk validator, indicators, data and WebSocket, news toggle, prompt parsing, LLM clients, Alpaca broker, SQLite log, Telegram commands, and the main loop. 39 tests passing. The rules backtest is built, but the audit, proposal scorer, and drawdown-reset scripts are still skeletons.

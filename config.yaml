@@ -1,0 +1,49 @@
+mode: paper            # paper | live
+cycle_minutes: 30
+safety_check_minutes: 5
+watchlist: [AAPL, MSFT, NVDA, AMZN, SPY, QQQ]    # will add more later
+
+risk:
+  max_risk_per_trade_pct: 2
+  max_position_pct: 15
+  max_open_positions: 5
+  max_total_open_risk_pct: 4
+  min_cash_pct: 15
+  daily_loss_limit_pct: 5
+  max_drawdown_pct: 15
+  min_stop_atr_multiple: 1.5
+  max_stop_pct: 8
+  min_reward_to_risk: 1.5
+
+timing:
+  skip_first_minutes: 15
+  skip_last_minutes: 30
+  max_data_age_seconds: 120
+  cancel_unfilled_entry_minutes: 10
+
+news:
+  headlines_enabled: true
+  earnings_filter_enabled: true
+
+llm:
+  providers:         # tried in order, next one on error/rate limit/bad JSON
+    - name: nvidia-openrouter
+      provider: openai_compat
+      base_url: https://openrouter.ai/api/v1
+      model: nvidia/nemotron-3-ultra-550b-a55b:free
+      api_key_env: NVIDIA_API_KEY
+    - name: groq
+      provider: openai_compat
+      base_url: https://api.groq.com/openai/v1
+      model: openai/gpt-oss-120b
+      api_key_env: GROQ_API_KEY
+  timeout_seconds: 60
+  max_calls_per_day: 50
+  monthly_budget_usd: 0
+
+execution:
+  entry_limit_buffer_pct: 0.1
+
+monitoring:
+  heartbeat_minutes: 5
+  alert_after_minutes: 15

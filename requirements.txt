@@ -1,0 +1,11 @@
+alpaca-py==0.35.0
+pydantic==2.10.4
+pyyaml==6.0.2
+python-dotenv==1.0.1
+requests==2.32.3
+python-telegram-bot==21.9
+pandas==2.2.3
+finnhub-python==5.0.0
+fredapi==0.7.1
+pytest==8.3.3
+pytest-mock==3.14.0
