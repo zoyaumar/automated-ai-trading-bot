@@ -14,11 +14,11 @@ from alpaca.trading.requests import (
     TakeProfitRequest,
     TrailingStopOrderRequest,
 )
-from alpaca.trading.enums import OrderSide, TimeInForce, OrderType, QueryOrderStatus
+from alpaca.trading.enums import OrderSide, TimeInForce, OrderType
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
-from alpaca.trading.models import Account, Position, Order
+from alpaca.trading.models import TradeAccount, Position
 
 
 @dataclass
@@ -49,7 +49,7 @@ class Broker:
 
     # --- account ---
     def get_account(self) -> BrokerAccount:
-        acct: Account = self._trading.get_account()
+        acct: TradeAccount = self._trading.get_account()
         positions: dict[str, dict[str, Any]] = {}
         for p in self._trading.get_all_positions():
             positions[p.symbol] = {
@@ -59,7 +59,11 @@ class Broker:
                 "unrealized_pl": float(p.unrealized_pl),
             }
         open_orders: list[dict[str, Any]] = []
-        for o in self._trading.get_all_orders(status=QueryOrderStatus.OPEN):
+        for o in self._trading.get_orders():
+            status = getattr(o, "status", None)
+            status_str = status.value if hasattr(status, "value") else str(status)
+            if status_str != "open":
+                continue
             open_orders.append({
                 "id": o.id,
                 "symbol": o.symbol,

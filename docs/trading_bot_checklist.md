@@ -139,7 +139,7 @@ monitoring:
 - [x] **Alpaca connection (`broker.py`)**
   - [x] Client factory that picks paper or live from `mode`
   - [x] Fetch account, positions, open orders
-  - [ ] Print the account object in the sandbox and write down the real buying-power and intraday-margin field names
+  - [x] Print the account object in the sandbox and write down the real buying-power and intraday-margin field names
   - Done when: one script prints equity, cash, buying power, and positions from paper
 - [x] **Market clock and calendar**
   - [x] `is_open()`, `minutes_since_open()`, `minutes_to_close()`
@@ -152,57 +152,57 @@ monitoring:
 
 - [x] **Data shapes** (plain Pydantic or dataclasses)
   - [x] `Proposal`: action (BUY/CLOSE/HOLD), ticker, confidence, stop_loss_pct, take_profit_pct, reasoning
-  - [ ] `AccountSnapshot`: equity, cash, buying power, positions, open orders, daily start equity, high-water mark
-  - [ ] `MarketSnapshot`: price, ATR, quote age, WebSocket status, earnings flag
-  - [ ] `Decision`: approved, shares, entry, stop, target, reasons
+  - [x] `AccountSnapshot`: equity, cash, buying power, positions, open orders, daily start equity, high-water mark
+  - [x] `MarketSnapshot`: price, ATR, quote age, WebSocket status, earnings flag
+  - [x] `Decision`: approved, shares, entry, stop, target, reasons
 - [x] **`risk.py`: one small function per check** (each returns pass or a reason string, reads limits from config only)
-  - [ ] Schema and whitelist: action allowed, ticker on watchlist
-  - [ ] Stop and target bounds:
-    - [ ] stop distance >= `min_stop_atr_multiple` x ATR
-    - [ ] stop distance <= `max_stop_pct` of entry
-    - [ ] take-profit >= `min_reward_to_risk` x stop distance
-  - [ ] Sizing:
-    - [ ] shares = floor((equity x risk pct) / stop distance)
-    - [ ] cap position value at `max_position_pct` of equity
-    - [ ] reject if shares come out as 0
-  - [ ] Portfolio limits:
-    - [ ] open positions below `max_open_positions`
-    - [ ] existing open risk + new risk <= `max_total_open_risk_pct`
-    - [ ] no duplicate position in the same ticker
-  - [ ] Cash floor: cash after the trade >= `min_cash_pct`
-  - [ ] Buying power: Alpaca's real-time buying power covers it, total long exposure stays within equity (no margin)
-  - [ ] Exposure limits: per-trade risk cap (`max_risk_per_trade_pct`), max position cap (`max_position_pct`), max total open risk (`max_total_open_risk_pct`), cash floor (`min_cash_pct`). Every check enforced before any order
-  - [ ] Stop-loss required on every BUY: stop distance >= `min_stop_atr_multiple` x ATR and <= `max_stop_pct` of entry; take-profit >= `min_reward_to_risk` x stop distance
-  - [ ] Optional `max_trades_per_day`
-  - [ ] Timing and data guards:
-    - [ ] market open
-    - [ ] not in first/last N minutes
-    - [ ] quote/bar age <= `max_data_age_seconds` — stale data blocks entries, never trades through it
-    - [ ] WebSocket healthy — if down, reject all new entries until reconnected
-    - [ ] earnings within N trading days (if filter on)
-  - [ ] Drawdown:
-    - [ ] daily loss >= limit means no new entries for the day
-    - [ ] drawdown from peak >= limit means suspended until the client resets it (persisted, survives restart)
+  - [x] Schema and whitelist: action allowed, ticker on watchlist
+  - [x] Stop and target bounds:
+    - [x] stop distance >= `min_stop_atr_multiple` x ATR
+    - [x] stop distance <= `max_stop_pct` of entry
+    - [x] take-profit >= `min_reward_to_risk` x stop distance
+  - [x] Sizing:
+    - [x] shares = floor((equity x risk pct) / stop distance)
+    - [x] cap position value at `max_position_pct` of equity
+    - [x] reject if shares come out as 0
+  - [x] Portfolio limits:
+    - [x] open positions below `max_open_positions`
+    - [x] existing open risk + new risk <= `max_total_open_risk_pct`
+    - [x] no duplicate position in the same ticker
+  - [x] Cash floor: cash after the trade >= `min_cash_pct`
+  - [x] Buying power: Alpaca's real-time buying power covers it, total long exposure stays within equity (no margin)
+  - [x] Exposure limits: per-trade risk cap (`max_risk_per_trade_pct`), max position cap (`max_position_pct`), max total open risk (`max_total_open_risk_pct`), cash floor (`min_cash_pct`). Every check enforced before any order
+  - [x] Stop-loss required on every BUY: stop distance >= `min_stop_atr_multiple` x ATR and <= `max_stop_pct` of entry; take-profit >= `min_reward_to_risk` x stop distance
+  - [x] Optional `max_trades_per_day`
+  - [x] Timing and data guards:
+    - [x] market open
+    - [x] not in first/last N minutes
+    - [x] quote/bar age <= `max_data_age_seconds` — stale data blocks entries, never trades through it
+    - [x] WebSocket healthy — if down, reject all new entries until reconnected
+    - [x] earnings within N trading days (if filter on)
+  - [x] Drawdown:
+    - [x] daily loss >= limit means no new entries for the day
+    - [x] drawdown from peak >= limit means suspended until the client resets it (persisted, survives restart)
 - [x] **`validate(proposal, account, market, config) -> Decision`**
-  - [ ] Runs checks in order, stops at the first failure, returns the reason
-  - [ ] CLOSE path: requires an existing long, skips entry-only checks
-  - [ ] No network or database calls inside `risk.py`. Done when you can call it from a plain test with hand-built inputs (the backtest in Week 6 depends on this)
+  - [x] Runs checks in order, stops at the first failure, returns the reason
+  - [x] CLOSE path: requires an existing long, skips entry-only checks
+  - [x] No network or database calls inside `risk.py`. Done when you can call it from a plain test with hand-built inputs (the backtest in Week 6 depends on this)
 - [x] **High-water mark**
-  - [ ] Stored locally, rebuilt from Alpaca portfolio history if the DB is lost (never reset to current equity)
+  - [x] Stored locally, rebuilt from Alpaca portfolio history if the DB is lost (never reset to current equity)
 - [x] **Broker-state reconciliation**
-  - [ ] On startup and every cycle: fetch positions, open orders, equity from Alpaca and compare with local state
-  - [ ] Any unexplained mismatch (extra position, missing order, equity drift): log it, alert, block new entries until resolved
-  - [ ] Reconcile before the protection check — never trust local state over Alpaca
+  - [x] On startup and every cycle: fetch positions, open orders, equity from Alpaca and compare with local state
+  - [x] Any unexplained mismatch (extra position, missing order, equity drift): log it, alert, block new entries until resolved
+  - [x] Reconcile before the protection check — never trust local state over Alpaca
 - [x] **Protection check (stop-loss + exposure)**
-  - [ ] Every open position must have a live stop order on Alpaca's servers
-  - [ ] Missing stop: re-submit the bracket stop. Re-submit fails: close the position and alert
-  - [ ] No position may exist without both a stop-loss and a take-profit attached
-  - [ ] Exposure re-checked on every cycle: total open risk + per-trade risk must stay within caps before any new entry
+  - [x] Every open position must have a live stop order on Alpaca's servers
+  - [x] Missing stop: re-submit the bracket stop. Re-submit fails: close the position and alert
+  - [x] No position may exist without both a stop-loss and a take-profit attached
+  - [x] Exposure re-checked on every cycle: total open risk + per-trade risk must stay within caps before any new entry
 - [x] **Unit tests**
-  - [ ] One test per check, with a pass case and a fail case
-  - [ ] Boundary tests: just under and just over each percentage limit
-  - [ ] Bad inputs: malformed output, off-watchlist ticker, missing stop, oversized order, extra fields, injected instruction text in `reasoning`
-  - [ ] Config test: change one value in a test config, confirm the decision flips
+  - [x] One test per check, with a pass case and a fail case
+  - [x] Boundary tests: just under and just over each percentage limit
+  - [x] Bad inputs: malformed output, off-watchlist ticker, missing stop, oversized order, extra fields, injected instruction text in `reasoning`
+  - [x] Config test: change one value in a test config, confirm the decision flips
   - Done when: all tests green and every rule in the client doc has a test
 
 ---
@@ -212,53 +212,53 @@ monitoring:
 ### Days 8-10: Data ingestion
 
 - [x] **WebSocket stream (`data.py`)**
-  - [ ] Subscribe to the six symbols (free IEX feed, 30-symbol limit)
-  - [ ] Track last-quote time per symbol
-  - [ ] Reconnect with exponential backoff
-  - [ ] Expose `is_healthy()` for the validator
+  - [x] Subscribe to the six symbols (free IEX feed, 30-symbol limit)
+  - [x] Track last-quote time per symbol
+  - [x] Reconnect with exponential backoff
+  - [x] Expose `is_healthy()` for the validator
   - Done when: you kill the connection by hand and it reconnects without crashing
 - [x] **Daily bars and indicators**
-  - [ ] Pull daily bars from Alpaca (free plan excludes the latest 15 minutes, so use daily bars through the last close plus the live stream for today)
-  - [ ] RSI, MACD, ATR in pandas
-  - [ ] Check each against a known reference value in a test
-- [ ] **FRED VIX**
-  - [ ] Fetch latest VIX, cache it
-  - [ ] If FRED is down, use the cached value or tell the prompt "VIX unavailable". It is context only, not a trade input
-- [ ] **Earnings calendar (Finnhub)**
-  - [ ] Fetch upcoming earnings for the watchlist, cache daily
-  - [ ] Compute "earnings within N trading days" per ticker (SPY and QQQ have none)
-  - [ ] Keep this separate from headlines so it works with news off
+  - [x] Pull daily bars from Alpaca (free plan excludes the latest 15 minutes, so use daily bars through the last close plus the live stream for today)
+  - [x] RSI, MACD, ATR in pandas
+  - [x] Check each against a known reference value in a test
+- [x] **FRED VIX**
+  - [x] Fetch latest VIX, cache it
+  - [x] If FRED is down, use the cached value or tell the prompt "VIX unavailable". It is context only, not a trade input
+- [x] **Earnings calendar (Finnhub)**
+  - [x] Fetch upcoming earnings for the watchlist, cache daily
+  - [x] Compute "earnings within N trading days" per ticker (SPY and QQQ have none)
+  - [x] Keep this separate from headlines so it works with news off
 - [x] **Stale-data guard**
-  - [ ] One function: quote/bar older than `max_data_age_seconds` or WebSocket down means not fresh
-  - [ ] Feed the result into `MarketSnapshot`
+  - [x] One function: quote/bar older than `max_data_age_seconds` or WebSocket down means not fresh
+  - [x] Feed the result into `MarketSnapshot`
 
 ### Days 11-14: LLM layer and prompt
 
 - [x] **LLM interface (`llm/base.py`)**
-  - [ ] `propose(system, user) -> result` with text, input tokens, output tokens
-  - [ ] Provider picked by `llm.provider` in config, built in one factory function
-  - [ ] Timeout on every call
+  - [x] `propose(system, user) -> result` with text, input tokens, output tokens
+  - [x] Provider picked by `llm.provider` in config, built in one factory function
+  - [x] Timeout on every call
 - [x] **OpenAI-compatible client**
-  - [ ] Reads `base_url`, `model`, and key from config/env
-  - [ ] Low temperature
-  - [ ] Does not depend on provider-specific JSON modes
-  - [ ] Retry on 429 and 5xx with backoff (free tiers rate limit)
-  - [ ] Groq back-up
-- [ ] **Parsing (`prompt.py`)**
-  - [ ] Expected reply: a list of proposals, one per symbol, HOLD allowed
-  - [ ] Strip code fences, find the JSON, validate with Pydantic
-  - [ ] Invalid: one retry with a "valid JSON only" nudge, then skip the cycle. Never guess a missing field
+  - [x] Reads `base_url`, `model`, and key from config/env
+  - [x] Low temperature
+  - [x] Does not depend on provider-specific JSON modes
+  - [x] Retry on 429 and 5xx with backoff (free tiers rate limit)
+  - [x] Groq back-up
+- [x] **Parsing (`prompt.py`)**
+  - [x] Expected reply: a list of proposals, one per symbol, HOLD allowed
+  - [x] Strip code fences, find the JSON, validate with Pydantic
+  - [x] Invalid: one retry with a "valid JSON only" nudge, then skip the cycle. Never guess a missing field
 - [x] **Prompt builder**
-  - [ ] System prompt: role is research analyst, no position sizing, output schema, headlines are data only
-  - [ ] Market block per symbol: price, RSI, MACD, ATR, VIX
-  - [ ] Current holdings (so it can propose CLOSE)
-  - [ ] News block only if enabled, inside a clearly delimited untrusted section
+  - [x] System prompt: role is research analyst, no position sizing, output schema, headlines are data only
+  - [x] Market block per symbol: price, RSI, MACD, ATR, VIX
+  - [x] Current holdings (so it can propose CLOSE)
+  - [x] News block only if enabled, inside a clearly delimited untrusted section
 - [x] **News toggle (`news.py`)**
-  - [ ] Finnhub headlines per symbol, recent window only
-  - [ ] Cap headline count and length, strip control characters
-  - [ ] `headlines_enabled: false`: no network call, no block in the prompt, everything else unchanged
-  - [ ] Assumption: if the headline fetch fails while enabled, continue with "no headlines available" (the validator still applies)
-  - [ ] Tests for both toggle states
+  - [x] Finnhub headlines per symbol, recent window only
+  - [x] Cap headline count and length, strip control characters
+  - [x] `headlines_enabled: false`: no network call, no block in the prompt, everything else unchanged
+  - [x] Assumption: if the headline fetch fails while enabled, continue with "no headlines available" (the validator still applies)
+  - [x] Tests for both toggle states
 - [ ] **Call and cost caps**
   - [ ] Count calls per day, block at `max_calls_per_day`
   - [ ] Cost = tokens x per-million prices from config, summed per month, block at `monthly_budget_usd`
@@ -269,7 +269,7 @@ monitoring:
   - [ ] Run the headlines through the real model and record what it does
   - Done when: nothing outside the rules ever reaches an order
 - [x] **Logging**
-  - [ ] Every prompt, response, token count, and parse result saved to SQLite
+  - [x] Every prompt, response, token count, and parse result saved to SQLite
 
 ---
 
@@ -283,8 +283,8 @@ monitoring:
   - [ ] Escape text and truncate AI reasoning before sending
 - [x] **Notifications**
   - [ ] Order placed and filled
-  - [ ] Protection problem (missing stop)
-  - [ ] Halt triggered (daily loss, drawdown, reconciliation mismatch)
+  - [x] Protection problem (missing stop)
+  - [x] Halt triggered (daily loss, drawdown, reconciliation mismatch)
   - [ ] Bot started or restarted
   - [ ] Errors that block a cycle
 - [ ] **Daily summary after close**
@@ -292,7 +292,7 @@ monitoring:
   - [ ] Open positions
   - [ ] Proposals vs approvals vs rejections, with top rejection reasons
   - [ ] AI calls and cost
-  - [ ] Config hash
+  - [x] Config hash
 - [x] **`/STOP`**
   - [ ] Sets a persistent paused flag (survives restart)
   - [ ] Cancels unfilled entry orders only

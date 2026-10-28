@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS responses (
     received_at TEXT NOT NULL,
     FOREIGN KEY(prompt_id) REFERENCES prompts(id)
 );
-"""
+
 CREATE TABLE IF NOT EXISTS proposals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cycle_id INTEGER NOT NULL,
@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS alerts (
     kind TEXT NOT NULL,
     message TEXT NOT NULL
 );
-
+"""
 
 class Store:
     def __init__(self, db_path: str | Path = "data/bot.db") -> None:
@@ -242,4 +242,3 @@ class Store:
                 (self.now_iso(), kind, message),
             )
             return cur.lastrowid
-"""

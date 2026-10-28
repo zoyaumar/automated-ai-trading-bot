@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import math
+import os
 import time
 from collections import deque
 from datetime import datetime, timezone, timedelta
 from typing import Any
+
+import pandas as pd
+import requests
 
 from alpaca.data.live import StockDataStream
 from alpaca.data.historical import StockHistoricalDataClient
@@ -100,3 +104,53 @@ class WebSocketStream:
         if t is None:
             return float("inf")
         return (datetime.now(timezone.utc) - t).total_seconds()
+
+
+class FredClient:
+    """FRED macro data client — VIX series for market context.
+
+    FRED API is free. VIX (series id: VIXCLS) is updated daily.
+    """
+
+    def __init__(self, api_key: str | None = None) -> None:
+        self.api_key = api_key or os.environ.get("FRED_API_KEY", "")
+        self.base_url = "https://api.stlouisfed.org/fred/series/observations"
+
+    def get_vix(self) -> dict[str, object] | None:
+        """Fetch the latest VIX observation.
+
+        Returns {value, date} or None on failure.
+        """
+        if not self.api_key:
+            return None
+        try:
+            params = {
+                "series_id": "VIXCLS",
+                "api_key": self.api_key,
+                "file_type": "json",
+                "limit": 1,
+                "sort_order": "desc",
+            }
+            resp = requests.get(self.base_url, params=params, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            obs = data.get("observations", [])
+            if not obs:
+                return None
+            latest = obs[0]
+            value = latest.get("value")
+            if value in (".", "", None):
+                return None
+            return {
+                "value": float(value),
+                "date": latest.get("date"),
+            }
+        except Exception:
+            return None
+
+
+def get_vix_level(api_key: str | None = None) -> float | None:
+    """Convenience: return latest VIX level or None."""
+    client = FredClient(api_key)
+    result = client.get_vix()
+    return result["value"] if result else None

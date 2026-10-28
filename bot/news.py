@@ -6,6 +6,7 @@ Toggleable via config. Headlines are treated as untrusted data.
 from __future__ import annotations
 
 import os
+from datetime import date, datetime, timezone
 from typing import Any
 
 import finnhub
@@ -44,15 +45,35 @@ class NewsClient:
         return result
 
     def get_earnings_within_days(self, symbols: list[str], days: int = 1) -> dict[str, int | None]:
-        """Return {symbol: days_until_earnings or None}."""
+        """Return {symbol: days_until_earnings or None}.
+
+        Uses Finnhub earnings calendar. Returns the number of days until
+        the next earnings date for each symbol, or None if no earnings
+        data is available or the filter is disabled.
+        """
         if not self.earnings_filter_enabled or self._client is None:
             return {s: None for s in symbols}
+        today = date.today()
         result: dict[str, int | None] = {}
         for symbol in symbols:
             try:
                 cal = self._client.earnings_calendar(symbol=symbol)
-                # Simplified: return earliest upcoming earnings days offset
-                result[symbol] = None  # Finnhub calendar returns dates; compute offset in main loop
+                upcoming = []
+                for entry in cal:
+                    earnings_date_str = entry.get("date")
+                    if not earnings_date_str:
+                        continue
+                    try:
+                        earnings_date = datetime.strptime(earnings_date_str, "%Y-%m-%d").date()
+                    except ValueError:
+                        continue
+                    if earnings_date >= today:
+                        upcoming.append(earnings_date)
+                if upcoming:
+                    days_until = (min(upcoming) - today).days
+                    result[symbol] = days_until
+                else:
+                    result[symbol] = None
             except Exception:
                 result[symbol] = None
         return result
