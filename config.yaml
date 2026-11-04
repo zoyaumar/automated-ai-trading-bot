@@ -27,10 +27,10 @@ news:
 
 llm:
   providers:         # tried in order, next one on error/rate limit/bad JSON
-    - name: nvidia-openrouter
+    - name: nvidia-integrate
       provider: openai_compat
-      base_url: https://openrouter.ai/api/v1
-      model: nvidia/nemotron-3-ultra-550b-a55b:free
+      base_url: https://integrate.api.nvidia.com/v1
+      model: nvidia/nemotron-3-ultra-550b-a55b
       api_key_env: NVIDIA_API_KEY
     - name: groq
       provider: openai_compat
@@ -40,6 +40,8 @@ llm:
   timeout_seconds: 60
   max_calls_per_day: 50
   monthly_budget_usd: 0
+  input_cost_per_mtok: 0
+  output_cost_per_mtok: 0
 
 execution:
   entry_limit_buffer_pct: 0.1

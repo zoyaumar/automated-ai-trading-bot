@@ -54,6 +54,10 @@ class TradingBot:
             model=provider["model"],
             api_key_env=provider["api_key_env"],
             timeout_seconds=llm_cfg.get("timeout_seconds", 60),
+            max_calls_per_day=llm_cfg.get("max_calls_per_day"),
+            input_cost_per_mtok=llm_cfg.get("input_cost_per_mtok", 0.0),
+            output_cost_per_mtok=llm_cfg.get("output_cost_per_mtok", 0.0),
+            monthly_budget_usd=llm_cfg.get("monthly_budget_usd", 0.0),
         )
 
         news_cfg = self.cfg["news"]

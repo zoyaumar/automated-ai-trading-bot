@@ -17,6 +17,11 @@ Catching
 - Don't let your own raised exceptions get caught by your own except block. Use a different exception type or raise outside the try.
 - Validate response shape (missing keys, empty lists, None values) and raise one clear error instead of letting KeyError/IndexError/TypeError leak out.
 
+Docstrings
+- Keep the first line of the docstring as a short, complete summary of what the module/class does (e.g. "Alpaca broker integration: account, orders, clock, reconcile, bracket orders.").
+- If there's additional functionality, add it as a second paragraph separated by a blank line. Do NOT change the first line.
+
+
 Config
 - Validate required settings (API key, base URL) at init and fail early with a clear message. Don't let an empty value turn into an auth error later.
 

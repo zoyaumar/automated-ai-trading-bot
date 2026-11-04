@@ -29,6 +29,8 @@ class LLMConfig(BaseModel):
     timeout_seconds: int = 60
     max_calls_per_day: int = 50
     monthly_budget_usd: float = 0.0
+    input_cost_per_mtok: float = 0.0
+    output_cost_per_mtok: float = 0.0
 
     @model_validator(mode="after")
     def _validate_providers(self) -> LLMConfig:

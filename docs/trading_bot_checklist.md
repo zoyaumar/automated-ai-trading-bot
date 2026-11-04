@@ -107,8 +107,8 @@ monitoring:
 
 - [ ] **Accounts and keys**
   - [x] Alpaca paper account, trading-only API keys
-  - [ ] Finnhub key
-  - [ ] FRED key
+  - [x] Finnhub key
+  - [x] FRED key
   - [x] Free LLM provider key & back up (pick one provider, note its rate limits)
   - [ ] Telegram bot via BotFather, and the client's numeric chat ID
   - [ ] Heartbeat (dead-man's-switch) account, with email/SMS alert contacts for you and the client
@@ -143,7 +143,7 @@ monitoring:
   - Done when: one script prints equity, cash, buying power, and positions from paper
 - [x] **Market clock and calendar**
   - [x] `is_open()`, `minutes_since_open()`, `minutes_to_close()`
-  - [ ] Holidays and half-days from Alpaca's calendar
+  - [x] Holidays and half-days from Alpaca's calendar
 - [x] **SQLite log (`store.py`)**
   - [x] Tables: cycles, prompts and responses, proposals, decisions (with reasons and config hash), orders, equity snapshots
   - [x] Treat as log and cache only
