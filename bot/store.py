@@ -108,6 +108,12 @@ CREATE TABLE IF NOT EXISTS alerts (
     kind TEXT NOT NULL,
     message TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS bot_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 class Store:
@@ -242,3 +248,20 @@ class Store:
                 (self.now_iso(), kind, message),
             )
             return cur.lastrowid
+
+    def get_state(self, key: str) -> str | None:
+        with self.transaction() as conn:
+            cur = conn.execute(
+                "SELECT value FROM bot_state WHERE key=?", (key,)
+            )
+            row = cur.fetchone()
+            return row["value"] if row else None
+
+    def set_state(self, key: str, value: str) -> None:
+        with self.transaction() as conn:
+            conn.execute(
+                "INSERT INTO bot_state (key, value, updated_at) VALUES (?,?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value, "
+                "updated_at=excluded.updated_at",
+                (key, value, self.now_iso()),
+            )

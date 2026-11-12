@@ -11,6 +11,21 @@ import pytest
 from bot.config import Settings
 
 
+def pytest_configure(config):
+    """Load .env at session start so real-model tests can use API keys."""
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip()
+            if key and val and key not in os.environ:
+                os.environ[key] = val
+
+
 @pytest.fixture
 def tmp_config(tmp_path: Path) -> Path:
     """Write a minimal config.yaml to a temp dir and return its path."""
@@ -74,14 +89,16 @@ def settings(tmp_config: Path) -> Settings:
 
 @pytest.fixture(autouse=True)
 def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Prevent accidental network calls in tests."""
-    monkeypatch.setenv("ALPACA_PAPER_KEY", "")
-    monkeypatch.setenv("ALPACA_PAPER_SECRET", "")
-    monkeypatch.setenv("FINNHUB_API_KEY", "")
-    monkeypatch.setenv("FRED_API_KEY", "")
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "")
-    monkeypatch.setenv("TELEGRAM_CHAT_ID", "")
-    monkeypatch.setenv("HEARTBEAT_URL", "")
-    monkeypatch.setenv("NVIDIA_API_KEY", "")
-    monkeypatch.setenv("GROQ_API_KEY", "")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    """Prevent accidental network calls in tests. Preserve real LLM keys if present."""
+    # Only clear if not already set (e.g., loaded from .env via pytest_configure)
+    for key in [
+        "ALPACA_PAPER_KEY", "ALPACA_PAPER_SECRET",
+        "FINNHUB_API_KEY", "FRED_API_KEY",
+        "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "HEARTBEAT_URL",
+    ]:
+        if key not in os.environ:
+            monkeypatch.setenv(key, "")
+    # Preserve LLM keys if they exist (for real-model tests)
+    for key in ["NVIDIA_API_KEY", "GROQ_API_KEY", "ANTHROPIC_API_KEY"]:
+        if key not in os.environ:
+            monkeypatch.setenv(key, "")

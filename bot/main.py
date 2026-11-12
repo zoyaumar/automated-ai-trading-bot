@@ -76,8 +76,8 @@ class TradingBot:
             alert_after_minutes=mon_cfg.get("alert_after_minutes", 15),
         )
 
-        self.paused = False
-        self.drawdown_suspended = False
+        self.paused = self.store.get_state("paused") == "1"
+        self.drawdown_suspended = self.store.get_state("drawdown_suspended") == "1"
         self.high_water_mark = 0.0
         self.daily_start_equity = 0.0
         self.last_trade_day: str | None = None
@@ -300,28 +300,99 @@ class TradingBot:
                 self.notify.send_alert("Cycle Error", str(exc)[:500])
             for cmd in self.notify.poll_commands():
                 self._handle_command(cmd["command"])
+            # Heartbeat dead-man's-switch alert
+            if self.notify.heartbeat_stale() and not self.notify.heartbeat_alert_sent():
+                self.notify.send_alert("Heartbeat Silent", (
+                    f"No heartbeat ping for >{self.notify.alert_after_minutes} min. "
+                    f"Bot may be stuck."
+                ))
+                self.notify.mark_heartbeat_alert_sent()
             time.sleep(min(cycle_seconds, 5))
 
     def _handle_command(self, command: str) -> None:
         if command == "/STOP":
             self.paused = True
-            self.notify.send_message("Paused: new entries stopped. Stops stay on existing positions.")
+            self.store.set_state("paused", "1")
+            # Cancel unfilled entry orders only; leave stops/targets on open positions
+            cancelled = self._cancel_unfilled_entry_orders()
+            self.notify.send_message(
+                f"Paused: new entries stopped. Cancelled {cancelled} unfilled entry "
+                f"order(s). Stops/targets on open positions stay active."
+            )
         elif command == "/RESUME":
             self.paused = False
-            self.drawdown_suspended = False
-            self.notify.send_message("Resumed.")
+            self.store.set_state("paused", "0")
+            self.notify.send_message("Resumed new entries.")
         elif command == "/FLATTEN":
             self.paused = True
-            self.notify.send_alert("FLATTEN", "Closing all positions and cancelling orders.")
+            self.store.set_state("paused", "1")
+            cancelled, closed = self._flatten_all()
+            self.notify.send_alert(
+                "FLATTEN",
+                f"Cancelled {cancelled} order(s), closed {closed} position(s). "
+                f"Bot paused; no new entries.",
+            )
         else:
             self.notify.send_message(f"Unknown command: {command}")
 
 
+    def _cancel_unfilled_entry_orders(self) -> int:
+        """Cancel open entry (limit) orders. Leave stop/target orders on open positions."""
+        acct = self.broker.get_account()
+        cancelled = 0
+        for order in acct["open_orders"]:
+            symbol = order["symbol"]
+            is_entry_order = order["type"] == "limit" and symbol not in acct["positions"]
+            if not is_entry_order:
+                continue
+            try:
+                self.broker.cancel_order(order["id"])
+                cancelled += 1
+                # Mark as cancelled in store
+                coid = order.get("client_order_id")
+                if coid:
+                    self.store.update_order_fill(str(coid), "")
+            except Exception:
+                pass
+        return cancelled
+
+    def _flatten_all(self) -> tuple[int, int]:
+        """Cancel all open orders, then close all positions. Returns (cancelled, closed)."""
+        acct = self.broker.get_account()
+        cancelled = 0
+        for order in acct["open_orders"]:
+            try:
+                self.broker.cancel_order(order["id"])
+                cancelled += 1
+                coid = order.get("client_order_id")
+                if coid:
+                    self.store.update_order_fill(str(coid), "")
+            except Exception:
+                pass
+        closed = 0
+        for symbol in acct["positions"]:
+            try:
+                self.broker.close_position(symbol)
+                closed += 1
+            except Exception:
+                pass
+        return cancelled, closed
+
+    def _startup_protection(self) -> None:
+        """Run reconcile + protection check before entering the main loop."""
+        acct = self._account_snapshot()
+        if not self._protection_check():
+            self.notify.send_alert(
+                "Startup Halted",
+                "Protection check failed at startup. Bot paused until resolved.",
+            )
+
+
 def main() -> None:
     bot = TradingBot()
+    bot._startup_protection()
     bot.run()
 
 
 if __name__ == "__main__":
     main()
-        self.running = False

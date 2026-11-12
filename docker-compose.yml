@@ -7,6 +7,11 @@ services:
       - ./config.yaml:/app/config.yaml:ro
       - bot_data:/app/data
     tz: America/New_York
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   bot_data:

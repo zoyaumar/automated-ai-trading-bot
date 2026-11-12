@@ -278,15 +278,15 @@ monitoring:
 ### Days 15-17: Telegram and heartbeat
 
 - [x] **Bot basics (`notify.py`)**
-  - [ ] Long polling
-  - [ ] Chat ID allowlist: ignore (and log) anything else
-  - [ ] Escape text and truncate AI reasoning before sending
+  - [x] Long polling
+  - [x] Chat ID allowlist: ignore (and log) anything else
+  - [x] Escape text and truncate AI reasoning before sending
 - [x] **Notifications**
-  - [ ] Order placed and filled
+  - [x] Order placed and filled
   - [x] Protection problem (missing stop)
   - [x] Halt triggered (daily loss, drawdown, reconciliation mismatch)
-  - [ ] Bot started or restarted
-  - [ ] Errors that block a cycle
+  - [x] Bot started or restarted
+  - [x] Errors that block a cycle
 - [ ] **Daily summary after close**
   - [ ] Equity and day P&L
   - [ ] Open positions
@@ -294,17 +294,17 @@ monitoring:
   - [ ] AI calls and cost
   - [x] Config hash
 - [x] **`/STOP`**
-  - [ ] Sets a persistent paused flag (survives restart)
-  - [ ] Cancels unfilled entry orders only
-  - [ ] Leaves stops and targets on open positions
-  - [ ] Replies with what it did
+  - [x] Sets a persistent paused flag (survives restart)
+  - [x] Cancels unfilled entry orders only
+  - [x] Leaves stops and targets on open positions
+  - [x] Replies with what it did
 - [x] **`/FLATTEN`**
-  - [ ] Cancels all orders, then closes all positions
+  - [x] Cancels all orders, then closes all positions
   - [ ] Sets the paused flag so the bot doesn't re-enter next cycle
-  - [ ] Replies with what it did
+  - [x] Replies with what it did
 - [x] **Resume path**
   - [ ] Small addition: `/RESUME` clears a manual `/STOP`
-  - [ ] Drawdown suspension is cleared only by a deliberate script on the server, after client review
+  - [x] Drawdown suspension is cleared only by a deliberate script on the server, after client review
 - [x] **Heartbeat**
   - [ ] Ping every `heartbeat_minutes` during market hours
   - [ ] Alert (email/SMS to you and the client) after `alert_after_minutes` of silence
@@ -313,10 +313,10 @@ monitoring:
 ### Days 18-21: Docker and VPS
 
 - [x] **Docker**
-  - [ ] Dockerfile: slim Python image, non-root user, no secrets baked in
+  - [x] Dockerfile: slim Python image, non-root user, no secrets baked in
   - [ ] docker-compose: `restart: always`, volume for SQLite, `config.yaml` mounted so you can edit on the server, `.env` via `env_file`
-  - [ ] Log size limits so the disk can't fill
-  - [ ] Container timezone set correctly
+  - [x] Log size limits so the disk can't fill
+  - [x] Container timezone set correctly
 - [ ] **VPS setup**
   - [ ] Provision a Linux VPS
   - [ ] Non-root user, SSH keys only, root and password login off
@@ -326,7 +326,7 @@ monitoring:
   - [ ] Install Docker, `.env` permissions locked down (600)
   - [ ] systemd unit that starts compose on boot
 - [x] **Startup sequence (`main.py`)**
-  - [ ] Load and validate config, connect to Alpaca, reconcile, protection check, then start the loop
+  - [x] Load and validate config, connect to Alpaca, reconcile, protection check, then start the loop
 - [ ] **Deploy and verify**
   - [ ] Run a full cycle on paper during market hours
   - [ ] Reboot the server, confirm it recovers by itself and reconciles
