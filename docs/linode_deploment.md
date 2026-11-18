@@ -264,22 +264,6 @@ for row in conn.execute('SELECT * FROM cycles ORDER BY id DESC LIMIT 5'): print(
 
 ---
 
-## 10. Why Linode over Oracle Free Tier?
-
-| Factor | Oracle Free Tier | Linode $5/mo |
-|--------|------------------|--------------|
-| **Reliability** | Idle reclamation kills VMs after 7 days | No idle reclamation |
-| **Support** | Community only | 24/7 ticket support |
-| **Backups** | Manual | $2/mo automated |
-| **Network** | Variable | Predictable, low latency to US-East |
-| **Setup time** | 5–30 min provisioning | ~2 min provisioning |
-| **Architecture** | ARM A1 (limited images) | x86_64 (standard) |
-| **Monthly cost** | $0 (+ $200 credit optional) | $5–7 fixed |
-
-For a production trading bot where uptime matters, Linode's predictable $5/mo is a better fit than Oracle's free-tier limitations.
-
----
-
 ## 11. Quick Reference
 
 ```bash
