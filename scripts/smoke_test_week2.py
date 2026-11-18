@@ -41,12 +41,12 @@ def main() -> None:
 
     # 1. Indicators (pure, no network)
     print("\n[1/4] Indicators (pure pandas)...")
-    prices = [float(100 + i) for i in range(30)]
+    prices = [float(100 + i) for i in range(40)]  # MACD needs 35+ (slow=26 + signal=9)
     rsi = compute_rsi(prices)
     macd = compute_macd(prices)
     atr = compute_atr(
-        [float(105 + i) for i in range(30)],
-        [float(95 + i) for i in range(30)],
+        [float(105 + i) for i in range(40)],
+        [float(95 + i) for i in range(40)],
         prices,
     )
     print(f"  RSI(30 rising): {rsi:.1f} (expect >70)")
