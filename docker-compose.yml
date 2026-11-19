@@ -6,7 +6,8 @@ services:
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - bot_data:/app/data
-    tz: America/New_York
+    environment:
+      - TZ=America/New_York
     logging:
       driver: "json-file"
       options:

@@ -65,6 +65,7 @@ class TimingConfig(BaseModel):
     skip_last_minutes: int = Field(ge=0)
     max_data_age_seconds: int = Field(ge=0)
     cancel_unfilled_entry_minutes: int = Field(ge=0)
+    earnings_skip_trading_days: int = Field(ge=0, default=1)
 
 
 class NewsConfig(BaseModel):

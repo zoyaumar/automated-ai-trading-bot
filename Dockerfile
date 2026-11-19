@@ -21,6 +21,7 @@ COPY .env.example ./
 
 # Non-root user for security
 RUN useradd --create-home --shell /bin/bash botuser && \
+    mkdir -p /app/data && \
     chown -R botuser:botuser /app
 USER botuser
 

@@ -98,6 +98,10 @@ def test_stop_too_tight() -> None:
         entry_price=150.0, atr=5.0,
         min_stop_atr_multiple=1.5, max_stop_pct=8, min_reward_to_risk=1.5,
     )
+    assert ok is False
+    assert reasons is not None
+
+
 def test_stop_too_wide() -> None:
     ok, reasons = check_stop_and_target_bounds(
         Proposal(action="BUY", ticker="AAPL", stop_loss_pct=10, take_profit_pct=20),

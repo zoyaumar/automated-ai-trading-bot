@@ -58,8 +58,8 @@ class OpenAICompatLLM(LLMInterface):
         return in_cost + out_cost
 
     def _reset_if_new_day(self) -> None:
-        """Reset daily call counter if the calendar day has rolled over."""
-        today = time.strftime("%Y-%m-%d", time.localtime())
+        """Reset daily call counter if the UTC calendar day has rolled over."""
+        today = time.strftime("%Y-%m-%d", time.gmtime())
         with self._lock:
             if self._last_reset_day != today:
                 self.call_count = 0

@@ -275,12 +275,13 @@ def check_portfolio_limits(proposal: Proposal, account: AccountSnapshot,
     """new_trade_risk: dollars at risk on this proposal, shares * (entry - stop)."""
     if proposal.action != "BUY":
         return True, reasons
-    if proposal.ticker in account.positions:
-        return False, _reasons_list(reasons, f"already long {proposal.ticker}")
+    ticker = proposal.ticker.strip().upper()
+    if ticker in account.positions:
+        return False, _reasons_list(reasons, f"already long {ticker}")
 
     pending = _pending_buys(account)
-    if any(p["symbol"] == proposal.ticker for p in pending):
-        return False, _reasons_list(reasons, f"pending BUY order already open for {proposal.ticker}")
+    if any(p["symbol"] == ticker for p in pending):
+        return False, _reasons_list(reasons, f"pending BUY order already open for {ticker}")
     if any(p["price"] is None for p in pending):
         return False, _reasons_list(
             reasons, "pending BUY order without a limit price; can't size open risk"

@@ -54,28 +54,73 @@ def _fmt_signed_money(value: float) -> str:
     return f"{'+' if value >= 0 else '-'}${abs(value):,.2f}"
 
 
+class HeartbeatMonitor:
+    """Independent dead-man's-switch HTTP monitor.
+
+    Periodically pings an external monitor (Healthchecks.io, BetterStack, etc.).
+    Decoupled from messaging channels like Telegram.
+    """
+
+    def __init__(self, heartbeat_url: str | None = None,
+                 alert_after_minutes: int = 15) -> None:
+        self.heartbeat_url = heartbeat_url.strip() if heartbeat_url else ""
+        self.alert_after_minutes = alert_after_minutes
+        self._last_ok_ping: float | None = time.monotonic() if self.heartbeat_url else None
+        self._alert_sent: bool = False
+
+    def ping(self) -> bool:
+        """Ping the heartbeat URL. Returns True if ping succeeded or no URL configured."""
+        if not self.heartbeat_url:
+            return True
+        try:
+            resp = requests.get(self.heartbeat_url, timeout=10)
+        except requests.RequestException as exc:
+            # Don't log the URL: heartbeat ping URLs are effectively secrets.
+            logger.error("Heartbeat ping failed: %s", type(exc).__name__)
+            return False
+        if not resp.ok:
+            logger.error("Heartbeat ping failed: HTTP %s", resp.status_code)
+            return False
+        self._last_ok_ping = time.monotonic()
+        self._alert_sent = False  # reset alert on successful ping
+        return True
+
+    def is_stale(self) -> bool:
+        """True if no successful ping has occurred within alert_after_minutes."""
+        if not self.heartbeat_url or self._last_ok_ping is None:
+            return False
+        return (time.monotonic() - self._last_ok_ping) > (self.alert_after_minutes * 60)
+
+    @property
+    def alert_sent(self) -> bool:
+        return self._alert_sent
+
+    def mark_alert_sent(self) -> None:
+        self._alert_sent = True
+
+
 class TelegramClient:
     def __init__(self, bot_token: str, chat_id: str | int,
                  heartbeat_url: str | None = None,
                  heartbeat_minutes: int = 5,
                  alert_after_minutes: int = 15,
                  allowed_user_id: str | int | None = None,
-                 max_command_age_seconds: float = 120.0) -> None:
+                 max_command_age_seconds: float = 120.0,
+                 heartbeat_monitor: HeartbeatMonitor | None = None) -> None:
         if not bot_token or not str(chat_id):
             raise ValueError("bot_token and chat_id are required")
         self.bot_token = bot_token
         self.chat_id = str(chat_id)
         self.allowed_user_id = str(allowed_user_id) if allowed_user_id is not None else None
         self.base_url = f"https://api.telegram.org/bot{bot_token}"
+        self.heartbeat_monitor = heartbeat_monitor or HeartbeatMonitor(
+            heartbeat_url=heartbeat_url, alert_after_minutes=alert_after_minutes
+        )
         self.heartbeat_url = heartbeat_url
         self.heartbeat_minutes = heartbeat_minutes
         self.alert_after_minutes = alert_after_minutes
         self.max_command_age_seconds = max_command_age_seconds
 
-        # Dead-man's-switch clock starts now, so "never pinged successfully"
-        # eventually counts as stale instead of being ignored.
-        self._last_ok_ping: float | None = time.monotonic() if heartbeat_url else None
-        self._alert_sent: bool = False
         self._offset: int | None = None
         self._poll_backoff: float = 0.0
 
@@ -189,37 +234,21 @@ class TelegramClient:
         lines += [f"AI cost: ${ai_cost:.4f}", f"Config hash: <code>{_e(config_hash)}</code>"]
         return self.send_message("\n".join(lines))
 
-    # --- heartbeat ---
+    # --- heartbeat (delegated to HeartbeatMonitor) ---
 
     def ping_heartbeat(self) -> bool:
-        """Ping the heartbeat URL. The local clock only advances on success."""
-        if not self.heartbeat_url:
-            return True
-        try:
-            resp = requests.get(self.heartbeat_url, timeout=10)
-        except requests.RequestException as exc:
-            # Don't log the URL: heartbeat ping URLs are effectively secrets.
-            logger.error("Heartbeat ping failed: %s", type(exc).__name__)
-            return False
-        if not resp.ok:
-            logger.error("Heartbeat ping failed: HTTP %s", resp.status_code)
-            return False
-        self._last_ok_ping = time.monotonic()
-        self._alert_sent = False  # reset alert on successful ping
-        return True
+        """Ping the heartbeat URL via the decoupled monitor."""
+        return self.heartbeat_monitor.ping()
 
     def heartbeat_stale(self) -> bool:
-        """True if there has been no successful ping for alert_after_minutes
-        (counted from construction if none has succeeded yet)."""
-        if not self.heartbeat_url or self._last_ok_ping is None:
-            return False
-        return (time.monotonic() - self._last_ok_ping) > (self.alert_after_minutes * 60)
+        """True if there has been no successful ping for alert_after_minutes."""
+        return self.heartbeat_monitor.is_stale()
 
     def heartbeat_alert_sent(self) -> bool:
-        return self._alert_sent
+        return self.heartbeat_monitor.alert_sent
 
     def mark_heartbeat_alert_sent(self) -> None:
-        self._alert_sent = True
+        self.heartbeat_monitor.mark_alert_sent()
 
     # --- command polling ---
 

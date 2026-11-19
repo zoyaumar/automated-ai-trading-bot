@@ -1,159 +1,142 @@
-# Linode (Akamai Cloud) Deployment Guide
+# Linode (Akamai Cloud) Deployment & 1-Month Paper Trading Guide
 
-Focused setup guide for deploying the trading bot on Linode's $5/mo Nanode.
-
----
-
-## 1. Prerequisites
-
-| Tool | Version |
-|------|---------|
-| **Docker** | 24+ |
-| **Docker Compose** | v2 |
-| **Linode account** | $5/mo Nanode (1 GB RAM, 1 vCPU, 25 GB SSD) |
-| **SSH key** | `ssh-keygen -t ed25519` |
+Production deployment guide for running the AI Trading Bot on a **Linode $5/mo Nanode** (1 GB RAM, 1 vCPU, 25 GB SSD, Newark/US-East region) in **paper-trading mode**.
 
 ---
 
-## 2. Linode Account Setup
+## 1. Architecture & Security Model
 
-### 2a. Create Account
-
-1. Go to <https://login.linode.com/signup>
-2. Sign up with email, Google, or GitHub
-3. Add payment method (card or PayPal)
-4. Verify phone number if prompted
-
-### 2b. Create Limited-Access User (for automation/CI)
-
-> This follows the principle of least privilege — the bot's deployment user only needs Linode/Firewall management, not billing access.
-
-1. **Administration → Identity & Access → Users**
-2. Click **Add A User**
-3. Enter username and email (Linode emails a password-setup link)
-4. Click **Add User**
-5. Find the user in the list → **⋮ → View Assigned Roles**
-6. Assign:
-   - **Linode Creator / Admin** (create/manage Linodes)
-   - **Firewall Creator / Admin** (manage firewalls)
-7. **Leave all billing roles unassigned**
+The bot is designed to be **operationally zero-trust and self-contained**:
+* **Zero Inbound Ports**: Operates exclusively via outbound HTTPS requests and outbound WebSocket connections to Alpaca, Telegram (long-polling), LLM endpoints, and Finnhub. No web servers or open inbound webhooks.
+* **Non-Root Container**: Runs inside Docker under an unprivileged user (`botuser`), with persistent data stored in a dedicated named volume (`bot_data`).
+* **Decoupled Dead-Man's Switch**: Pings an external heartbeat monitor (e.g., [Healthchecks.io](https://healthchecks.io)) every 5 minutes independently of Telegram messaging.
+* **Persistent SQLite Audit Log**: All cycles, LLM prompts/responses, orders, equity snapshots, and alerts are written to `data/bot.db` with SQLite WAL mode enabled.
 
 ---
 
-## 3. Create the Linode
+## 2. Linode Server Provisioning
 
-### 3a. Via Cloud Manager (GUI)
+### 2a. Create the Linode Instance
+1. Log into [Linode Cloud Manager](https://cloud.linode.com).
+2. Click **Create Linode**:
+   - **Distribution**: Ubuntu 24.04 LTS (or 22.04 LTS).
+   - **Region**: **Newark, NJ (us-east)** — lowest latency to NYSE/Nasdaq and Alpaca servers.
+   - **Plan**: **Shared CPU -> Nanode 1GB** ($5.00/mo).
+   - **Label**: `trading-bot-paper`
+   - **SSH Keys**: Select or upload your `id_ed25519.pub` key.
+   - **Backups**: Recommended (+$2/mo) for automated daily snapshot retention.
+3. Click **Create Linode**.
 
-1. **Linodes → Create Linode**
-2. **Distribution**: Ubuntu 24.04 LTS (or 22.04 LTS)
-3. **Region**: Closest to your users / NYSE (e.g., **Newark, NJ** for US equities)
-4. **Type**: **Nanode 1GB** ($5/mo)
-   - 1 vCPU, 1 GB RAM, 25 GB SSD, 1 TB transfer
-5. **Label**: `trading-bot`
-6. **Root password**: Generate strong password (save it)
-7. **SSH Keys**: Add your `id_ed25519.pub`
-8. Click **Create Linode**
-
-### 3b. Via CLI (optional)
-
+### 2b. Initial Server Hardening & Clock Sync
+SSH into your Linode as root:
 ```bash
-linode-cli linodes create \
-  --image linode/ubuntu24.04 \
-  --type g6-nanode-1 \
-  --region us-east \
-  --label trading-bot \
-  --authorized_keys "$(cat ~/.ssh/id_ed25519.pub)" \
-  --root_pass "your-strong-password"
+ssh -i ~/.ssh/id_ed25519 root@<LINODE_IP>
 ```
----
 
-## 4. Provision & Harden
-
+Run initial setup:
 ```bash
-# SSH in
-ssh -i ~/.ssh/id_ed25519 root@<linode-ip>
-
-# Update & install Docker
+# 1. Update system packages
 apt-get update && apt-get upgrade -y
-apt-get install -y docker.io docker-compose-plugin
+
+# 2. Install Docker, Docker Compose, and Chrony (time sync)
+apt-get install -y docker.io docker-compose-plugin chrony ufw fail2ban
 systemctl enable --now docker
+systemctl enable --now chrony
+systemctl enable --now fail2ban
 
-# Create non-root user for bot operations
-adduser --disabled-password --gecos "" botuser
-usermod -aG docker botuser
+# 3. Synchronize system clock (Critical for market data timestamps & order signing)
+timedatectl set-timezone America/New_York
+timedatectl set-ntp true
+chronyc tracking
 
-# Firewall (UFW) — allow only SSH + bot's outbound
+# 4. Host Firewall (UFW) - Block ALL inbound except SSH
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow ssh
-ufw enable
+ufw allow 22/tcp comment 'SSH'
+ufw --force enable
 
-# Optional: Fail2Ban for SSH brute-force protection
-apt-get install -y fail2ban
-systemctl enable --now fail2ban
+# 5. Create unprivileged operator user
+adduser --disabled-password --gecos "" botuser
+usermod -aG docker botuser
 ```
 
 ---
 
-## 5. Deploy the Bot
+## 3. Bot Installation
 
+Switch to the `botuser` operator account:
 ```bash
-# Switch to botuser
 su - botuser
+```
 
-# Clone repo
+Clone the repository and set up environment:
+```bash
 git clone https://github.com/zoyaumar/automated-ai-trading-bot.git
 cd automated-ai-trading-bot
 
-# Configure environment
+# Set up environment variables
 cp .env.example .env
-# Edit .env with your keys (see Section 6)
-
-# Review config.yaml (paper mode default)
-cat config.yaml
-
-# Start
-docker compose up -d
-
-# Verify
-docker compose ps
-docker compose logs -f --tail 30
+chmod 600 .env
+nano .env
 ```
 
 ---
 
-## 6. Configuration
+## 4. Environment Configuration (`.env`)
 
-### 6a. `.env` (gitignored)
+Fill in the `.env` file with your credentials:
 
 ```ini
-# Alpaca (paper keys for testing)
-ALPACA_PAPER_KEY=PKxxxxxxxxxxxxxxxxxxxx
-ALPACA_PAPER_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# ==========================================
+# Alpaca Trading API (Paper Trading)
+# ==========================================
+ALPACA_PAPER_KEY=PKXXXXXXXXXXXXXXXXXX
+ALPACA_PAPER_SECRET=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ALPACA_LIVE_KEY=
 ALPACA_LIVE_SECRET=
 
-# LLM — pick one
-NVIDIA_API_KEY=nvapi-xxxxxxxxxxxxxxxxxxxxxxxx
-# GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxxxxx
+# ==========================================
+# LLM Providers (Configure at least one)
+# ==========================================
+# For NVIDIA NIM:
+NVIDIA_API_KEY=nvapi-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# For Groq:
+# GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# For Anthropic Claude:
+# ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxxxxxx
 
-# Data
-FINNHUB_API_KEY=xxxxxxxxxxxxxxxxxxxx
-FRED_API_KEY=xxxxxxxxxxxxxxxxxxxx
+# ==========================================
+# Market News & Macro
+# ==========================================
+FINNHUB_API_KEY=your_finnhub_key_here
+FRED_API_KEY=your_fred_key_here
 
-# Telegram (optional but recommended)
-TELEGRAM_BOT_TOKEN=xxxxxxxxxxxxxxxxxxxx
-TELEGRAM_CHAT_ID=123456789
+# ==========================================
+# Telegram Monitoring & Commands
+# ==========================================
+TELEGRAM_BOT_TOKEN=123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ
+TELEGRAM_CHAT_ID=your_chat_or_group_id
 
-# Heartbeat (optional — Healthchecks.io, cronitor, etc.)
-# HEARTBEAT_URL=https://hc-ping.com/your-uuid
+# TELEGRAM_USER_ID is your numeric personal user ID (from @userinfobot).
+# Restricts /stop, /resume, /flatten commands to YOU only, even in groups.
+TELEGRAM_USER_ID=your_numeric_user_id
+
+# ==========================================
+# External Dead-Man's Switch (Recommended)
+# ==========================================
+# Create a free check at https://healthchecks.io with 5-min interval, 15-min grace:
+HEARTBEAT_URL=https://hc-ping.com/your-uuid-here
 ```
 
-### 6b. `config.yaml` (key settings)
+---
+
+## 5. Verify `config.yaml`
+
+Ensure `config.yaml` is set for paper trading and proper risk controls:
 
 ```yaml
-mode: paper                 # paper | live
-cycle_minutes: 30
+mode: paper                 # MUST be paper
+cycle_minutes: 30           # Evaluation frequency
 safety_check_minutes: 5
 
 watchlist: [AAPL, MSFT, NVDA, AMZN, SPY, QQQ]
@@ -166,6 +149,20 @@ risk:
   min_cash_pct: 15
   daily_loss_limit_pct: 5
   max_drawdown_pct: 15
+  min_stop_atr_multiple: 1.5
+  max_stop_pct: 8
+  min_reward_to_risk: 1.5
+
+timing:
+  skip_first_minutes: 15
+  skip_last_minutes: 30
+  max_data_age_seconds: 120
+  cancel_unfilled_entry_minutes: 10
+  earnings_skip_trading_days: 1
+
+news:
+  headlines_enabled: true
+  earnings_filter_enabled: true
 
 llm:
   providers:
@@ -174,111 +171,142 @@ llm:
       base_url: https://integrate.api.nvidia.com/v1
       model: nvidia/nemotron-3-ultra-550b-a55b
       api_key_env: NVIDIA_API_KEY
+  timeout_seconds: 60
   max_calls_per_day: 50
+  monthly_budget_usd: 0
+
+execution:
+  entry_limit_buffer_pct: 0.1
 
 monitoring:
   heartbeat_minutes: 5
   alert_after_minutes: 15
 ```
 
-> **Changes require restart:** `docker compose restart`
-
 ---
 
-## 7. Linode-Specific Operations
+## 6. Launch & Verification
 
-### 7a. Backups ($2/mo)
-
-**Linodes → trading-bot → Backups → Enable Backups**
-- Daily automated snapshots
-- 7-day retention
-- One-click restore
-
-### 7b. Monitoring & Alerts
-
-- **Linodes → trading-bot → Monitoring** — CPU, RAM, disk, network
-- Set alerts: CPU > 80%, RAM > 85%, Disk > 90%
-- Integrate with PagerDuty / Slack / email
-
-### 7c. Scheduled Reboots (kernel updates)
-
+### 6a. Start the Container
 ```bash
-# As root, schedule monthly reboot at 4 AM ET (market closed)
-crontab -e
-# Add:
-0 4 1 * * /sbin/shutdown -r now
-```
-
-### 7d. Cost Control
-
-- **Nanode 1GB**: $5/mo (capped, hourly billing)
-- **Backups**: +$2/mo
-- **Total**: $7/mo with backups
-- Delete Linode anytime to stop charges
-
----
-
-## 8. Key Commands
-
-```bash
-# Start
-docker compose up -d
-
-# Tail logs
-docker compose logs -f --tail 100
-
-# Restart
-docker compose restart
-
-# Stop
-docker compose down
-
-# Update & rebuild
-git pull
 docker compose up -d --build
-
-# Shell access
-docker compose exec bot bash
-
-# View SQLite DB
-docker compose exec bot python -c "
-import sqlite3; conn = sqlite3.connect('data/bot.db');
-for row in conn.execute('SELECT * FROM cycles ORDER BY id DESC LIMIT 5'): print(row)
-"
 ```
 
+### 6b. Verify Running Container & Logs
+```bash
+# Check status
+docker compose ps
+
+# Tail application logs
+docker compose logs -f --tail 50
+```
+
+You should see:
+1. `Bot started` in logs and received as a Telegram message.
+2. WebSocket subscribing to watchlist tickers.
+3. Successful initial heartbeat ping.
+4. Startup protection check passing.
+
 ---
 
-## 9. Common Pitfalls
+## 7. The 1-Month Paper Staging Plan
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| Bot exits immediately | Missing `.env` or bad `config.yaml` | `cp .env.example .env`, fix `config.yaml` |
-| `502` on NVIDIA API | Wrong key format | NVIDIA needs `nvapi-...`, not `sk-...` |
-| Bot doesn't trade | `mode: paper` | Change to `live` after paper testing |
-| Telegram messages missing | Wrong `chat_id` | Verify via Python: `bot.get_me()` |
-| OOM kills container | Host RAM exhausted | Check `docker stats`; upgrade to 2 GB if needed |
-| No proposals from LLM | Model returned non-JSON | Try different model / check provider status |
-| SSH timeout | UFW blocking | `ufw allow ssh` |
-| Clock drift | No NTP | `timedatectl set-ntp true` |
+Running in paper mode for 4 weeks on Linode validates all real-world edge cases before any real capital is deployed.
+
+```mermaid
+flowchart LR
+    W1[Week 1: Connectivity & Signals] --> W2[Week 2: Execution & Orders]
+    W2 --> W3[Week 3: Risk & Volatility Stress]
+    W3 --> W4[Week 4: Audit & Review]
+```
+
+### Week 1: Infrastructure & Telemetry Health
+* [ ] **Startup Notification**: Confirm you receive the "Bot started" Telegram message.
+* [ ] **WebSocket Longevity**: Monitor logs over a 24-hour cycle. Confirm the quote stream doesn't disconnect or freeze during market hours.
+* [ ] **Dead-Man's Switch**: Check [Healthchecks.io](https://healthchecks.io) dashboard to ensure green pings arrive every 5 minutes.
+* [ ] **Telegram Command Drill**: Send `/stop` and `/resume` from your mobile phone. Verify that:
+  - Bot responds promptly.
+  - The pause state persists in `data/bot.db`.
+  - Non-authorized users cannot execute commands.
+
+### Week 2: Signal Quality & LLM Accuracy
+* [ ] **Proposal Inspection**: Run SQLite queries to inspect proposals generated by the LLM:
+  ```bash
+  docker compose exec bot python -c "
+  import sqlite3; conn = sqlite3.connect('data/bot.db')
+  for row in conn.execute('SELECT ticker, action, confidence, stop_loss_pct, reasoning FROM proposals ORDER BY id DESC LIMIT 10'):
+      print(row)
+  "
+  ```
+* [ ] **JSON Validation**: Check if any LLM calls produced invalid JSON or triggered provider fallbacks.
+* [ ] **News & Earnings Gate**: Verify that symbols with upcoming earnings announcements within 1 day are successfully blocked by the risk firewall.
+
+### Week 3: Risk Firewall & Execution Realism
+* [ ] **Order Placement**: Confirm bracket orders (`BUY` limit with associated stop-loss and take-profit legs) appear on the [Alpaca Paper Dashboard](https://app.alpaca.markets/paper/dashboard/overview).
+* [ ] **Stop & Target Bounds**: Ensure no orders exceed the 2% trade risk or 15% position size caps.
+* [ ] **Emergency Flatten Drill**:
+  - Open a paper position.
+  - Send `/flatten` via Telegram.
+  - Confirm all open orders are cancelled, the position is closed via market order, and an audit alert is recorded in the database.
+
+### Week 4: Month-End Audit & Performance Review
+* [ ] **Reconciliation Check**: Run `scripts/audit.py` to compare Alpaca broker state against local SQLite records:
+  ```bash
+  docker compose exec bot python scripts/audit.py
+  ```
+* [ ] **Drawdown & High-Water Mark**: Check `equity_snapshots` in SQLite:
+  ```bash
+  docker compose exec bot python -c "
+  import sqlite3; conn = sqlite3.connect('data/bot.db')
+  for row in conn.execute('SELECT taken_at, equity, cash, high_water_mark, drawdown_pct FROM equity_snapshots ORDER BY id DESC LIMIT 5'):
+      print(row)
+  "
+  ```
+* [ ] **Resource Consumption**: Inspect Linode CPU and memory consumption:
+  ```bash
+  docker stats --no-stream
+  ```
+  (Memory should remain stable under 350 MB on the 1 GB Nanode).
 
 ---
 
-## 11. Quick Reference
+## 8. Operational Commands Reference
+
+| Action | Command |
+|---|---|
+| **View Live Logs** | `docker compose logs -f --tail 100` |
+| **Restart Container** | `docker compose restart` |
+| **Rebuild Container** | `git pull && docker compose up -d --build` |
+| **Stop Container** | `docker compose down` |
+| **Enter Container Shell** | `docker compose exec bot bash` |
+| **Inspect SQLite Alerts** | `docker compose exec bot python -c "import sqlite3; c=sqlite3.connect('data/bot.db'); print(c.execute('SELECT * FROM alerts ORDER BY id DESC LIMIT 10').fetchall())"` |
+| **Check Time Sync** | `chronyc tracking` |
+
+---
+
+## 9. Automated Database Backups (Cron)
+
+Set up a daily automated backup of the SQLite database to prevent loss:
 
 ```bash
-# Deploy from scratch (root)
-ssh root@<ip>
-apt-get update && apt-get install -y docker.io docker-compose-plugin ufw
-ufw allow ssh && ufw enable
-adduser --disabled-password --gecos "" botuser && usermod -aG docker botuser
-su - botuser
-git clone https://github.com/zoyaumar/automated-ai-trading-bot.git
-cd automated-ai-trading-bot
-cp .env.example .env
-# nano .env  # add keys
-docker compose up -d
-docker compose logs -f
+# As botuser on Linode host:
+crontab -e
 ```
 
-**Monthly cost: $5–7** | **Uptime: 99.9% SLA** | **Architecture: x86_64 (standard)**
+Add the following daily backup cron (runs at 4:30 AM ET when markets are closed):
+```bash
+30 4 * * * docker compose -f /home/botuser/automated-ai-trading-bot/docker-compose.yml exec -T bot sqlite3 data/bot.db ".backup data/bot_backup.db"
+```
+
+---
+
+## 10. Troubleshooting Matrix
+
+| Issue | Likely Cause | Solution |
+|---|---|---|
+| **Container exits on startup** | Missing or malformed `.env` | Run `docker compose logs` to read exact error. Verify all API keys are present. |
+| **Permission Denied for `data/bot.db`** | Docker volume mounted with root ownership | Ensure latest `Dockerfile` with `mkdir -p /app/data && chown -R botuser:botuser /app` is built. |
+| **Telegram commands ignored** | `TELEGRAM_USER_ID` mismatch | Send a message to `@userinfobot` to verify your numeric ID and update `.env`. |
+| **`WebSocket stopped` in logs** | Network glitch or Alpaca maintenance | WebSocket auto-reconnects with backoff. Check if persistent outside market hours. |
+| **Heartbeat alert received** | Container hung or VPS offline | SSH in, check `docker compose ps` and `docker compose logs --tail 100`. |
+| **Quote age stale error** | VPS clock drifted | Run `chronyc tracking` and `timedatectl set-ntp true`. |

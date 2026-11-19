@@ -24,7 +24,7 @@ from .prompt import build_prompt, parse_proposals
 from .risk import Proposal, AccountSnapshot, MarketSnapshot, validate
 from .store import Store
 from .llm import get_llm
-from .notify import TelegramClient, _e
+from .notify import TelegramClient, HeartbeatMonitor, _e
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,32 @@ class TradingBot:
 
         mode = self.cfg["mode"]
         paper = mode == "paper"
+        if not paper:
+            # LIVE safety audit: refuse to start without live prerequisites
+            live_key = os.environ.get("ALPACA_LIVE_KEY", "").strip()
+            live_secret = os.environ.get("ALPACA_LIVE_SECRET", "").strip()
+            tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+            tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+            missing = []
+            if not live_key:
+                missing.append("ALPACA_LIVE_KEY")
+            if not live_secret:
+                missing.append("ALPACA_LIVE_SECRET")
+            if not tg_token:
+                missing.append("TELEGRAM_BOT_TOKEN")
+            if not tg_chat:
+                missing.append("TELEGRAM_CHAT_ID")
+            if missing:
+                raise RuntimeError(
+                    f"FATAL: Live trading mode requires {', '.join(missing)}. "
+                    "Refusing to trade live with missing broker or alert credentials."
+                )
+            if not os.environ.get("HEARTBEAT_URL", "").strip():
+                logger.warning(
+                    "LIVE MODE WARNING: HEARTBEAT_URL is not set. "
+                    "Dead-man's-switch monitoring will be inactive."
+                )
+
         prefix = "ALPACA_PAPER" if paper else "ALPACA_LIVE"
         key = os.environ.get(f"{prefix}_KEY", "")
         secret = os.environ.get(f"{prefix}_SECRET", "")
@@ -72,10 +98,14 @@ class TradingBot:
         )
 
         mon_cfg = self.cfg["monitoring"]
+        self.monitor = HeartbeatMonitor(
+            heartbeat_url=os.environ.get("HEARTBEAT_URL", ""),
+            alert_after_minutes=mon_cfg.get("alert_after_minutes", 15),
+        )
         self.notify = TelegramClient(
             bot_token=os.environ.get("TELEGRAM_BOT_TOKEN", ""),
             chat_id=os.environ.get("TELEGRAM_CHAT_ID", ""),
-            heartbeat_url=os.environ.get("HEARTBEAT_URL", ""),
+            heartbeat_monitor=self.monitor,
             heartbeat_minutes=mon_cfg.get("heartbeat_minutes", 5),
             alert_after_minutes=mon_cfg.get("alert_after_minutes", 15),
             # Optional: restricts commands to one user (matters if the chat is a group).
@@ -100,6 +130,14 @@ class TradingBot:
     def _set_paused(self, value: bool) -> None:
         self.paused = value
         self.store.set_state("paused", "1" if value else "0")
+
+    def _send_alert(self, kind: str, message: str) -> bool:
+        """Audit alert into SQLite store and dispatch to Telegram."""
+        try:
+            self.store.insert_alert(kind, message)
+        except Exception:
+            logger.exception("Failed to record alert in store: [%s] %s", kind, message)
+        return self.notify.send_alert(kind, message)
 
     def _setup_signals(self) -> None:
         signal.signal(signal.SIGTERM, self._handle_signal)
@@ -180,7 +218,7 @@ class TradingBot:
         rec = self.broker.reconcile()
         unprotected = rec["unprotected_positions"]
         if unprotected:
-            self.notify.send_alert(
+            self._send_alert(
                 "Missing Stop",
                 f"No live stop covering full size: {', '.join(unprotected)}",
             )
@@ -196,7 +234,7 @@ class TradingBot:
             ok = False
         if not ok:
             self._set_paused(True)
-            self.notify.send_alert(
+            self._send_alert(
                 "Startup Halted",
                 "Protection check failed at startup. Bot paused; fix it, then send /resume.",
             )
@@ -224,7 +262,7 @@ class TradingBot:
 
         if not self._protection_check():
             self._set_paused(True)
-            self.notify.send_alert(
+            self._send_alert(
                 "Paused", "New entries paused until stops are fixed. Send /resume afterwards."
             )
             self.store.update_cycle(cycle_id, paused=True)
@@ -243,7 +281,7 @@ class TradingBot:
         # Held positions stay proposable (CLOSE) even if they left the watchlist.
         prompt_tickers = sorted(set(indicators) | set(account.positions))
         if not prompt_tickers:
-            self.notify.send_alert("Data Error", "No watchlist symbol has usable indicator data.")
+            self._send_alert("Data Error", "No watchlist symbol has usable indicator data.")
             self.store.update_cycle(cycle_id)
             return
 
@@ -296,7 +334,7 @@ class TradingBot:
         except Exception as exc:
             logger.exception("LLM call failed")
             self.store.insert_response(prompt_id, str(exc), None, None, None)
-            self.notify.send_alert("LLM Error", f"{type(exc).__name__}: {str(exc)[:500]}")
+            self._send_alert("LLM Error", f"{type(exc).__name__}: {str(exc)[:500]}")
             self.store.update_cycle(cycle_id)
             return
 
@@ -391,7 +429,7 @@ class TradingBot:
             )
         except Exception as exc:
             logger.exception("Bracket order failed for %s", ticker)
-            self.notify.send_alert("Order Error", f"{ticker}: {type(exc).__name__}: {str(exc)[:300]}")
+            self._send_alert("Order Error", f"{ticker}: {type(exc).__name__}: {str(exc)[:300]}")
             return False
 
         try:
@@ -409,7 +447,7 @@ class TradingBot:
             )
         except Exception:
             logger.exception("Order %s submitted but not recorded", client_order_id)
-            self.notify.send_alert(
+            self._send_alert(
                 "Store Error", f"{ticker}: order was submitted but not recorded in the database."
             )
 
@@ -423,9 +461,9 @@ class TradingBot:
             self.broker.close_position(ticker)
         except Exception as exc:
             logger.exception("Close failed for %s", ticker)
-            self.notify.send_alert("Close Error", f"{ticker}: {type(exc).__name__}: {str(exc)[:300]}")
+            self._send_alert("Close Error", f"{ticker}: {type(exc).__name__}: {str(exc)[:300]}")
             return False
-        self.notify.send_alert("Position Closing", f"{ticker}: close submitted (LLM CLOSE).")
+        self._send_alert("Position Closing", f"{ticker}: close submitted (LLM CLOSE).")
         return True
 
     # --- commands ---
@@ -440,7 +478,7 @@ class TradingBot:
                 self._handle_command(name)
             except Exception as exc:
                 logger.exception("Command %s failed", name)
-                self.notify.send_alert(
+                self._send_alert(
                     "Command Error", f"{name}: {type(exc).__name__}: {str(exc)[:300]}"
                 )
 
@@ -465,7 +503,7 @@ class TradingBot:
                 text += f" FAILED: {', '.join(failed)}."
             if remaining:
                 text += f" Still showing open: {', '.join(remaining)}."
-            self.notify.send_alert("FLATTEN", text)
+            self._send_alert("FLATTEN", text)
         else:
             self.notify.send_message(f"Unknown command: {_e(name)}")
 
@@ -550,27 +588,27 @@ class TradingBot:
                     self._run_cycle()
                 except Exception as exc:
                     logger.exception("Cycle failed")
-                    self.notify.send_alert(
+                    self._send_alert(
                         "Cycle Error", f"{type(exc).__name__}: {str(exc)[:500]}"
                     )
                 next_cycle = time.monotonic() + cycle_seconds
 
             # Heartbeat is independent of the market being open or the bot being paused.
             if time.monotonic() >= next_heartbeat:
-                self.notify.ping_heartbeat()
+                self.monitor.ping()
                 next_heartbeat = time.monotonic() + heartbeat_seconds
 
-            if self.notify.heartbeat_stale() and not self.notify.heartbeat_alert_sent():
-                sent = self.notify.send_alert(
+            if self.monitor.is_stale() and not self.monitor.alert_sent:
+                sent = self._send_alert(
                     "Heartbeat Silent",
-                    f"No successful heartbeat ping for >{self.notify.alert_after_minutes} min.",
+                    f"No successful heartbeat ping for >{self.monitor.alert_after_minutes} min.",
                 )
                 if sent:
-                    self.notify.mark_heartbeat_alert_sent()
+                    self.monitor.mark_alert_sent()
 
             self._stop_event.wait(1.0)
 
-        self.notify.send_alert("Bot Stopped", "Shutting down. Broker-side stops/targets stay active.")
+        self._send_alert("Bot Stopped", "Shutting down. Broker-side stops/targets stay active.")
         self.store.close()
 
 
