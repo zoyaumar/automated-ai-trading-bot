@@ -4,7 +4,7 @@ from bot.prompt import parse_proposals, strip_code_fences, extract_json, build_p
 
 
 def test_parse_valid_list() -> None:
-    raw = '[{"action":"BUY","ticker":"AAPL","stop_loss_pct":5,"take_profit_pct":10,"reasoning":"test"}]'
+    raw = '[{"action":"BUY","ticker":"AAPL","confidence":0.8,"stop_loss_pct":5,"take_profit_pct":10,"reasoning":"test"}]'
     result = parse_proposals(raw)
     assert result.parsed_ok is True
     assert len(result.proposals) == 1
@@ -42,7 +42,10 @@ def test_build_prompt() -> None:
         market_block="AAPL: RSI=50",
         holdings_block="AAPL: 10 shares",
         news_block=None,
+        watchlist=["AAPL", "MSFT"],
     )
     assert "You are an analyst." in prompt
     assert "AAPL: RSI=50" in prompt
     assert "AAPL: 10 shares" in prompt
+    assert "Include exactly one proposal for each of these tickers" in prompt
+    assert "AAPL, MSFT" in prompt
