@@ -16,6 +16,12 @@ import signal
 import threading
 import time
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from .config import Settings
 from .broker import Broker
 from .data import DataClient, WebSocketStream

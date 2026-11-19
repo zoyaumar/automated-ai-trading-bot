@@ -23,7 +23,6 @@ from typing import Any, Callable, TypeVar
 from zoneinfo import ZoneInfo
 
 from alpaca.common.exceptions import APIError
-from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderClass, OrderSide, QueryOrderStatus, TimeInForce
 from alpaca.trading.models import Calendar, TradeAccount
@@ -137,7 +136,6 @@ class Broker:
         if not api_key or not api_secret:
             raise ValueError("API key and secret are required")
         self._trading = TradingClient(api_key, api_secret, paper=paper)
-        self._data = StockHistoricalDataClient(api_key, api_secret)  # not used yet
         self.paper = paper
         self._calendar_cache: list[Calendar] | None = None
         self._calendar_window: tuple[date, date] | None = None
